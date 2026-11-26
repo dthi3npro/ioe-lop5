@@ -34,14 +34,60 @@ export interface Question {
   explanation: string;
 }
 
+export interface VocabWord {
+  id: string;
+  themeId: string;
+  word: string;
+  phonetic: string;
+  meaningVi: string;
+  emoji: string;
+  exampleEn: string;
+  exampleVi: string;
+  audioUrl: string;
+}
+
+export interface VocabTheme {
+  id: string;
+  title: string;
+  emoji: string;
+  color: string;
+  desc: string;
+}
+
+export interface LearningUnit {
+  id: string;
+  order: number;
+  title: string;
+  subtitle: string;
+  emoji: string;
+  color: string;
+  vocabThemeId?: string;
+  questionIds?: string[];
+  filterFnKey:
+    | 'school'
+    | 'family_home'
+    | 'tenses'
+    | 'places_prepositions'
+    | 'health_safety'
+    | 'weather_travel'
+    | 'animals_food'
+    | 'listening'
+    | 'reorder_fill'
+    | 'pron_odd_stem';
+}
+
+export type SessionKind = 'ioe_exam' | 'unit_lesson' | 'mistake_review' | 'quick_practice';
+
 export interface ExamConfig {
   id: string;
   title: string;
   subtitle: string;
   mode: 'ioe_exam' | 'quick_practice';
+  sessionKind: SessionKind;
+  unitId?: string;
   year?: ExamYear | 'all';
   questionCount: number;
-  durationSeconds: number; // 1800 for 30 min IOE exam
+  durationSeconds: number;
   questions: Question[];
 }
 
@@ -53,12 +99,21 @@ export interface AnswerRecord {
   skipped?: boolean;
 }
 
+export interface MistakeEntry {
+  question: Question;
+  lastWrongAnswer: string;
+  wrongCount: number;
+  lastSeenISO: string;
+  resolved: boolean;
+}
+
 export interface ExamHistoryItem {
   id: string;
   dateISO: string;
   dateKey: string; // YYYY-MM-DD
   examTitle: string;
   mode: 'ioe_exam' | 'quick_practice';
+  sessionKind?: SessionKind;
   score: number;
   maxScore: number;
   correctCount: number;
@@ -71,15 +126,24 @@ export interface DailyStudyLog {
   dateKey: string; // YYYY-MM-DD
   questionsDone: number;
   correctCount: number;
-  examsCompleted: number;
-  minutesStudied: number;
+  examsCompleted: number; // Bài test Cấp Xã đã làm
+  lessonsCompleted: number; // Bài học chủ đề kiểu Duolingo đã làm
+  vocabSessions: number; // Lượt học từ vựng
+  minutesStudied: number; // Tổng phút học trong ngày
 }
 
 export interface UserProfile {
   name: string;
   className: string;
   avatar: string;
-  dailyGoal: number; // default 20 questions/day to keep streak
+  /** Legacy compatibility + general count */
+  dailyGoal: number;
+  /** 1-5 bài học chủ đề mỗi ngày */
+  dailyLessonsGoal: number;
+  /** 0 hoặc 1 bài test Cấp Xã mỗi ngày */
+  dailyExamGoal: number;
+  /** Mục tiêu số phút học mỗi ngày (10, 15, 20, 30, 45) */
+  dailyMinutesGoal: number;
   soundEnabled: boolean;
   streakFreezeCount: number;
 }
@@ -98,4 +162,10 @@ export interface AppState {
   history: ExamHistoryItem[];
   unlockedBadges: string[];
   customQuestions: Question[];
+  /** UnitId -> best stars (1..3) */
+  unitProgress: Record<string, { completions: number; bestAccuracy: number }>;
+  /** Mastered vocabulary word IDs */
+  masteredVocabIds: string[];
+  /** Persistent mistake notebook keyed by question.id */
+  mistakes: Record<string, MistakeEntry>;
 }

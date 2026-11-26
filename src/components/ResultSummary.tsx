@@ -13,8 +13,10 @@ import {
 import { BadgeDef, ExamHistoryItem } from '../types';
 
 interface Props {
+  studentName: string;
   result: ExamHistoryItem;
   newlyUnlockedBadges: BadgeDef[];
+  resolvedMistakesCount?: number;
   currentStreak: number;
   onGoHome: () => void;
   onRetryWrong?: () => void;
@@ -27,8 +29,10 @@ function formatTime(sec: number): string {
 }
 
 export const ResultSummary: React.FC<Props> = ({
+  studentName,
   result,
   newlyUnlockedBadges,
+  resolvedMistakesCount = 0,
   currentStreak,
   onGoHome,
   onRetryWrong,
@@ -50,12 +54,12 @@ export const ResultSummary: React.FC<Props> = ({
 
   const praise =
     accuracy >= 90
-      ? 'Xuất sắc tuyệt đối! Em sẵn sàng rinh giải Cấp Xã rồi! 🏆'
+      ? `Xuất sắc tuyệt đối! ${studentName} sẵn sàng rinh giải Cấp Xã rồi! 🏆`
       : accuracy >= 75
-      ? 'Giỏi lắm! Cố thêm chút nữa là chạm mốc thủ khoa nhé! 🌟'
+      ? `Giỏi lắm ${studentName}! Cố thêm chút nữa là chạm mốc thủ khoa nhé! 🌟`
       : accuracy >= 50
-      ? 'Khá tốt! Hãy xem lại những câu làm sai bên dưới để nhớ lâu hơn nha! 💪'
-      : 'Không sao đâu! Luyện tập mỗi ngày một chút là em sẽ tiến bộ vù vù! 🦉';
+      ? `Khá tốt! Các câu nhầm đã tự động lưu vào Sổ Lỗi Sai để ${studentName} ôn lại nha! 💪`
+      : `Không sao đâu ${studentName}! Học đều mỗi ngày một chút là tiến bộ vù vù! 🐰`;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-pop">
@@ -108,6 +112,16 @@ export const ResultSummary: React.FC<Props> = ({
             <div className="text-xs text-orange-600 font-semibold">ngày liên tiếp</div>
           </div>
         </div>
+
+        {/* Resolved Mistakes Celebration */}
+        {resolvedMistakesCount > 0 && (
+          <div className="px-6 pb-4">
+            <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 text-emerald-800 font-extrabold text-sm flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              Tuyệt vời! {studentName} vừa sửa thành công {resolvedMistakesCount} câu trong Sổ Lỗi Sai! 🎉
+            </div>
+          </div>
+        )}
 
         {/* Newly Unlocked Badges */}
         {newlyUnlockedBadges.length > 0 && (

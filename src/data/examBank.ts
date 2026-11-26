@@ -81,9 +81,37 @@ export function buildOfficialIOEExam(
     title,
     subtitle,
     mode: 'ioe_exam',
+    sessionKind: 'ioe_exam',
     year,
     questionCount: selected.length,
     durationSeconds: 30 * 60,
+    questions: selected,
+  };
+}
+
+/**
+ * Kid-friendly daily Mini-Test Cấp Xã (30 questions / 10 minutes, authentic IOE exam feel)
+ * so Mai Nhi can easily finish 1 test every day without getting tired!
+ */
+export function buildDailyMiniExam(
+  year: ExamYear | 'all' = 'all',
+  customQuestions: Question[] = []
+): ExamConfig {
+  const all = [...customQuestions, ...BUILTIN_QUESTIONS];
+  const pool = year === 'all' ? all : all.filter((q) => q.year === year);
+  const selected = randomShuffle(pool.length >= 30 ? pool : all).slice(0, 30);
+  return {
+    id: `mini_ioe_${year}_${Date.now()}`,
+    title:
+      year === 'all'
+        ? 'Bài Test Cấp Xã Hàng Ngày (30 câu)'
+        : `Bài Test Nhanh Cấp Xã ${year} (30 câu)`,
+    subtitle: '30 câu đủ mọi dạng bài thi IOE • 10 phút • Tính hoàn thành mục tiêu Test ngày',
+    mode: 'ioe_exam',
+    sessionKind: 'ioe_exam',
+    year,
+    questionCount: selected.length,
+    durationSeconds: 10 * 60,
     questions: selected,
   };
 }
@@ -147,6 +175,7 @@ export function buildQuickPractice(
     title: `Luyện Nhanh: ${catInfo?.label || 'Tổng hợp'}`,
     subtitle: `${selected.length} câu vui nhộn — có giải thích chi tiết sau mỗi câu`,
     mode: 'quick_practice',
+    sessionKind: 'quick_practice',
     questionCount: selected.length,
     durationSeconds: selected.length * 45, // comfortable pace
     questions: selected,

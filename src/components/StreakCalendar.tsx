@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Flame, Shield, Target, Trophy } from 'lucide-react';
 import { AppState } from '../types';
-import { computeStreakInfo, getTodayKey, shiftDateKey } from '../utils/storage';
+import { computeStreakInfo, didStudyOnLog, getTodayKey, shiftDateKey } from '../utils/storage';
 
 interface Props {
   state: AppState;
@@ -20,42 +20,53 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
   const [selectedDay, setSelectedDay] = useState<string>(today);
   const [monthOffset, setMonthOffset] = useState<number>(0);
 
+  const isLogFullGoal = (key: string) => {
+    const log = state.dailyLogs[key];
+    if (!log) return false;
+    const lessonsOk = log.lessonsCompleted >= state.profile.dailyLessonsGoal;
+    const examOk = state.profile.dailyExamGoal === 0 || log.examsCompleted >= state.profile.dailyExamGoal;
+    const minOk = log.minutesStudied >= state.profile.dailyMinutesGoal;
+    return lessonsOk && examOk && minOk;
+  };
+
   // Last 7 days strip
   const last7Days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
       const key = shiftDateKey(today, i - 6);
       const [y, m, d] = key.split('-').map(Number);
       const dt = new Date(y, m - 1, d);
-      const dow = dt.getDay(); // 0=Sun..6=Sat
+      const dow = dt.getDay();
       const label = dow === 0 ? 'CN' : `T${dow + 1}`;
       const log = state.dailyLogs[key];
+      const studied = didStudyOnLog(log);
       return {
         key,
         dayNum: d,
         label,
-        done: (log?.questionsDone || 0) > 0,
-        goalMet: (log?.questionsDone || 0) >= state.profile.dailyGoal,
-        questions: log?.questionsDone || 0,
+        done: studied,
+        goalMet: isLogFullGoal(key),
+        minutes: log?.minutesStudied || 0,
         isToday: key === today,
       };
     });
-  }, [state.dailyLogs, state.profile.dailyGoal, today]);
+  }, [state.dailyLogs, state.profile, today]);
 
   // Monthly calendar grid
   const calendarMonth = useMemo(() => {
     const now = new Date();
     const viewDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
     const year = viewDate.getFullYear();
-    const month = viewDate.getMonth(); // 0..11
-    const firstDow = viewDate.getDay(); // 0=Sun..6=Sat
-    const leadingBlanks = firstDow === 0 ? 6 : firstDow - 1; // Monday-first
+    const month = viewDate.getMonth();
+    const firstDow = viewDate.getDay();
+    const leadingBlanks = firstDow === 0 ? 6 : firstDow - 1;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const cells: Array<{
       key: string | null;
       dayNum?: number;
-      questions?: number;
+      studied?: boolean;
       goalMet?: boolean;
+      minutes?: number;
       isToday?: boolean;
     }> = [];
 
@@ -65,12 +76,12 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const log = state.dailyLogs[key];
-      const q = log?.questionsDone || 0;
       cells.push({
         key,
         dayNum: d,
-        questions: q,
-        goalMet: q >= state.profile.dailyGoal,
+        studied: didStudyOnLog(log),
+        goalMet: isLogFullGoal(key),
+        minutes: log?.minutesStudied || 0,
         isToday: key === today,
       });
     }
@@ -79,50 +90,55 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
       label: `Tháng ${month + 1} / ${year}`,
       cells,
     };
-  }, [monthOffset, state.dailyLogs, state.profile.dailyGoal, today]);
+  }, [monthOffset, state.dailyLogs, state.profile, today]);
 
   const selectedLog = state.dailyLogs[selectedDay];
-  const goalPct = Math.min(100, Math.round((streak.todayQuestions / state.profile.dailyGoal) * 100));
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Top Streak Banner */}
-      <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 p-4 sm:p-5 text-white">
+      <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 p-5 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center shadow-inner">
-              <Flame className={`w-9 h-9 ${streak.studiedToday ? 'text-yellow-100 fill-yellow-200' : 'text-white/80'}`} />
+          <div className="flex items-center gap-3.5">
+            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center shadow-inner">
+              <Flame
+                className={`w-10 h-10 ${
+                  streak.studiedToday ? 'text-yellow-100 fill-yellow-200' : 'text-white/80'
+                }`}
+              />
             </div>
             <div>
               <div className="text-xs uppercase tracking-wider font-bold text-orange-100">
-                Chuỗi ngày học liên tiếp
+                Chuỗi ngày học liên tiếp của {state.profile.name}
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl sm:text-4xl font-black">{streak.currentStreak}</span>
-                <span className="text-sm font-semibold">ngày liên tiếp</span>
+                <span className="text-4xl font-black">{streak.currentStreak}</span>
+                <span className="text-sm font-bold">ngày liên tiếp</span>
               </div>
               <div className="text-xs text-orange-50 mt-0.5">
-                {streak.studiedToday
-                  ? 'Tuyệt vời! Hôm nay em đã giữ lửa thành công 🔥'
-                  : 'Làm ngay 1 bài hôm nay để thắp lửa chuỗi học nhé!'}
+                {streak.todayAllGoalsMet
+                  ? `Xuất sắc! Hôm nay ${state.profile.name} đã đạt 100% kế hoạch ngày 🔥`
+                  : streak.studiedToday
+                  ? `Hôm nay đã giữ lửa (${streak.todayPlanPercent}% mục tiêu ngày) 🔥`
+                  : `Làm ngay 1 bài học chủ đề hoặc 5 phút từ vựng để giữ lửa hôm nay nhé!`}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-3 text-center">
-            <div className="bg-white/20 rounded-xl px-3 py-2 backdrop-blur">
+            <div className="bg-white/20 rounded-xl px-3.5 py-2 backdrop-blur">
               <div className="flex items-center justify-center gap-1 text-xs text-orange-100">
                 <Trophy className="w-3.5 h-3.5" /> Kỷ lục
               </div>
               <div className="text-lg font-extrabold">{streak.longestStreak} ngày</div>
             </div>
-            <div className="bg-white/20 rounded-xl px-3 py-2 backdrop-blur">
+            <div className="bg-white/20 rounded-xl px-3.5 py-2 backdrop-blur">
               <div className="flex items-center justify-center gap-1 text-xs text-orange-100">
                 <Calendar className="w-3.5 h-3.5" /> Tổng ngày
               </div>
               <div className="text-lg font-extrabold">{streak.totalStudyDays} ngày</div>
             </div>
-            <div className="bg-white/20 rounded-xl px-3 py-2 backdrop-blur hidden sm:block">
+            <div className="bg-white/20 rounded-xl px-3.5 py-2 backdrop-blur hidden sm:block">
               <div className="flex items-center justify-center gap-1 text-xs text-orange-100">
                 <Shield className="w-3.5 h-3.5" /> Khiên
               </div>
@@ -131,27 +147,32 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
           </div>
         </div>
 
-        {/* Daily Goal Progress */}
+        {/* Daily Plan Progress Bar */}
         <div className="mt-4 bg-white/15 rounded-xl p-3">
-          <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold mb-1.5">
             <span className="flex items-center gap-1.5">
               <Target className="w-4 h-4" />
-              Mục tiêu hôm nay: {streak.todayQuestions} / {state.profile.dailyGoal} câu
+              Hôm nay: {streak.todayLessons}/{state.profile.dailyLessonsGoal} bài học
+              {state.profile.dailyExamGoal > 0
+                ? ` • ${streak.todayExams}/${state.profile.dailyExamGoal} test Cấp Xã`
+                : ''}
+              {' • '}
+              {streak.todayMinutes}/{state.profile.dailyMinutesGoal} phút
             </span>
-            <span>{goalPct}%</span>
+            <span>{streak.todayPlanPercent}%</span>
           </div>
           <div className="h-2.5 bg-black/20 rounded-full overflow-hidden">
             <div
               className="h-full bg-white rounded-full transition-all duration-500"
-              style={{ width: `${goalPct}%` }}
+              style={{ width: `${streak.todayPlanPercent}%` }}
             />
           </div>
         </div>
       </div>
 
       {/* 7-Day Flame Strip */}
-      <div className="p-4 sm:p-5 border-b border-slate-100">
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+      <div className="p-5 border-b border-slate-100">
+        <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-3">
           7 ngày gần nhất
         </div>
         <div className="grid grid-cols-7 gap-2">
@@ -159,7 +180,7 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
             <button
               key={d.key}
               onClick={() => setSelectedDay(d.key)}
-              className={`flex flex-col items-center py-2 px-1 rounded-xl border transition-all cursor-pointer ${
+              className={`flex flex-col items-center py-2.5 px-1 rounded-xl border transition-all cursor-pointer ${
                 selectedDay === d.key
                   ? 'border-orange-400 bg-orange-50 shadow-sm'
                   : 'border-slate-100 hover:bg-slate-50'
@@ -169,7 +190,7 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
                 {d.label}
               </span>
               <div
-                className={`w-8 h-8 mt-1 rounded-full flex items-center justify-center text-sm font-bold ${
+                className={`w-9 h-9 mt-1 rounded-full flex items-center justify-center text-sm font-bold ${
                   d.goalMet
                     ? 'bg-gradient-to-br from-orange-400 to-red-500 text-white shadow'
                     : d.done
@@ -179,8 +200,8 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
               >
                 {d.done ? '🔥' : d.dayNum}
               </div>
-              <span className="text-[10px] text-slate-500 mt-1 font-medium">
-                {d.questions > 0 ? `${d.questions} câu` : '—'}
+              <span className="text-[10px] text-slate-500 mt-1 font-semibold">
+                {d.minutes > 0 ? `${d.minutes} phút` : '—'}
               </span>
             </button>
           ))}
@@ -188,10 +209,10 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
       </div>
 
       {/* Monthly Study Heatmap */}
-      <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
+      <div className="p-5 grid grid-cols-1 md:grid-cols-5 gap-5 items-start">
         <div className="md:col-span-3">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-slate-800">{calendarMonth.label}</span>
+            <span className="text-sm font-extrabold text-slate-800">{calendarMonth.label}</span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setMonthOffset((m) => m - 1)}
@@ -202,7 +223,7 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
               </button>
               <button
                 onClick={() => setMonthOffset(0)}
-                className="px-2 py-1 text-xs font-semibold rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+                className="px-2.5 py-1 text-xs font-bold rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
               >
                 Hôm nay
               </button>
@@ -222,25 +243,23 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1.5">
             {calendarMonth.cells.map((cell, idx) => {
               if (!cell.key) {
-                return <div key={`empty_${idx}`} className="h-8" />;
+                return <div key={`empty_${idx}`} className="h-9" />;
               }
-              const q = cell.questions || 0;
               let bgClass = 'bg-slate-100 text-slate-500 hover:bg-slate-200';
-              if (q >= 100) bgClass = 'bg-emerald-600 text-white font-bold';
-              else if (q >= state.profile.dailyGoal) bgClass = 'bg-emerald-400 text-white font-bold';
-              else if (q > 0) bgClass = 'bg-amber-200 text-amber-900 font-semibold';
+              if (cell.goalMet) bgClass = 'bg-emerald-500 text-white font-black shadow-xs';
+              else if (cell.studied) bgClass = 'bg-amber-200 text-amber-900 font-bold';
 
               return (
                 <button
                   key={cell.key}
                   onClick={() => setSelectedDay(cell.key!)}
-                  className={`h-8 rounded-lg text-xs flex items-center justify-center transition-all cursor-pointer ${bgClass} ${
+                  className={`h-9 rounded-lg text-xs flex items-center justify-center transition-all cursor-pointer ${bgClass} ${
                     selectedDay === cell.key ? 'ring-2 ring-blue-600 ring-offset-1' : ''
                   } ${cell.isToday ? 'underline decoration-2' : ''}`}
-                  title={`${formatDateVi(cell.key)}: ${q} câu`}
+                  title={`${formatDateVi(cell.key)}: ${cell.minutes || 0} phút`}
                 >
                   {cell.dayNum}
                 </button>
@@ -250,38 +269,50 @@ export const StreakCalendar: React.FC<Props> = ({ state }) => {
         </div>
 
         {/* Selected Day Details */}
-        <div className="md:col-span-2 bg-slate-50 rounded-xl p-4 border border-slate-200/80">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Chi tiết ngày {formatDateVi(selectedDay)}
+        <div className="md:col-span-2 bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+          <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+            Nhật ký ngày {formatDateVi(selectedDay)}
           </div>
-          {selectedLog && selectedLog.questionsDone > 0 ? (
-            <div className="mt-3 space-y-2.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Số câu đã làm:</span>
-                <span className="font-bold text-blue-700">{selectedLog.questionsDone} câu</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Số câu đúng:</span>
-                <span className="font-bold text-emerald-600">
-                  {selectedLog.correctCount} ({Math.round((selectedLog.correctCount / selectedLog.questionsDone) * 100)}%)
+          {selectedLog && didStudyOnLog(selectedLog) ? (
+            <div className="mt-3 space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">📚 Bài học chủ đề:</span>
+                <span className="font-extrabold text-emerald-700">
+                  {selectedLog.lessonsCompleted} bài
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Số lượt thi/luyện:</span>
-                <span className="font-bold text-slate-800">{selectedLog.examsCompleted} lượt</span>
+              <div className="flex justify-between">
+                <span className="text-slate-600">🏆 Bài Test Cấp Xã:</span>
+                <span className="font-extrabold text-blue-700">
+                  {selectedLog.examsCompleted} bài
+                </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">Thời gian học:</span>
-                <span className="font-bold text-amber-600">~{selectedLog.minutesStudied} phút</span>
+              <div className="flex justify-between">
+                <span className="text-slate-600">🌟 Lượt học Từ vựng:</span>
+                <span className="font-extrabold text-amber-600">
+                  {selectedLog.vocabSessions} lượt
+                </span>
               </div>
-              <div className="pt-2 border-t border-slate-200 text-xs font-semibold text-emerald-700">
-                {selectedLog.questionsDone >= state.profile.dailyGoal
-                  ? '✅ Đã hoàn thành mục tiêu ngày!'
-                  : '⭐ Có học tập! Làm thêm để đạt mục tiêu ngày.'}
+              <div className="flex justify-between">
+                <span className="text-slate-600">⏱️ Thời gian học:</span>
+                <span className="font-extrabold text-orange-600">
+                  ~{selectedLog.minutesStudied} phút
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">✅ Câu đúng / Tổng:</span>
+                <span className="font-extrabold text-slate-800">
+                  {selectedLog.correctCount} / {selectedLog.questionsDone} câu
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-200 text-xs font-bold text-emerald-700">
+                {isLogFullGoal(selectedDay)
+                  ? '🏆 Đạt 100% mục tiêu ngày!'
+                  : '🔥 Đã học giữ lửa thành công!'}
               </div>
             </div>
           ) : (
-            <div className="mt-4 text-center py-4 text-slate-400 text-sm">
+            <div className="mt-4 text-center py-6 text-slate-400 text-sm">
               Chưa có dữ liệu học tập trong ngày này.
             </div>
           )}
