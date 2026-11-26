@@ -48,7 +48,6 @@ import { QuestionBankManager } from './components/QuestionBankManager';
 import { ExamRoom } from './components/ExamRoom';
 import { ResultSummary } from './components/ResultSummary';
 import { ParentReportView } from './components/ParentReportView';
-import { pushProgressToCloud } from './utils/cloudSync';
 
 type Tab = 'learn' | 'vocab' | 'exam' | 'mistakes' | 'progress' | 'bank';
 
@@ -78,10 +77,6 @@ export function App() {
     window.history.pushState({}, '', '/');
     setIsParentView(false);
   };
-
-  const syncInBackground = (nextState: AppState) => {
-    void pushProgressToCloud(nextState);
-  };
   const [tab, setTab] = useState<Tab>('learn');
   const [vocabThemeId, setVocabThemeId] = useState<string>('school');
   const [activeExam, setActiveExam] = useState<ExamConfig | null>(null);
@@ -105,7 +100,6 @@ export function App() {
         profile: { ...prev.profile, ...patch },
       };
       saveAppState(next);
-      syncInBackground(next);
       return next;
     });
   };
@@ -174,7 +168,6 @@ export function App() {
       activeExam.unitId
     );
     setState(nextState);
-    syncInBackground(nextState);
     setActiveExam(null);
     setLastResult({
       item: historyItem,
@@ -371,18 +364,12 @@ export function App() {
             soundEnabled={state.profile.soundEnabled}
             studentName={state.profile.name}
             onToggleMastered={(wordId) =>
-              setState((prev) => {
-                const next = toggleVocabMastered(prev, wordId);
-                syncInBackground(next);
-                return next;
-              })
+              setState((prev) => toggleVocabMastered(prev, wordId))
             }
             onCompleteGame={(minutes, totalQ, correctQ) =>
-              setState((prev) => {
-                const next = recordVocabGameComplete(prev, minutes, totalQ, correctQ);
-                syncInBackground(next);
-                return next;
-              })
+              setState((prev) =>
+                recordVocabGameComplete(prev, minutes, totalQ, correctQ)
+              )
             }
           />
         )}
@@ -403,11 +390,7 @@ export function App() {
             mistakes={state.mistakes}
             onStartReviewMistakes={(qs) => startMistakeReview(qs)}
             onMarkResolved={(qid) =>
-              setState((prev) => {
-                const next = markMistakeResolved(prev, qid);
-                syncInBackground(next);
-                return next;
-              })
+              setState((prev) => markMistakeResolved(prev, qid))
             }
           />
         )}

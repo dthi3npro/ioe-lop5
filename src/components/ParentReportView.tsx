@@ -1,22 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  Cloud,
-  CloudOff,
   Flame,
   NotebookPen,
-  RefreshCw,
   Trophy,
   XCircle,
 } from 'lucide-react';
 import { AppState } from '../types';
-import {
-  CloudProgressSnapshot,
-  buildCloudSnapshot,
-  fetchProgressFromCloud,
-} from '../utils/cloudSync';
+import { VOCAB_WORDS } from '../data/vocabData';
 import { didStudyOnLog, getTodayKey, shiftDateKey } from '../utils/storage';
 
 interface Props {
@@ -37,50 +30,20 @@ export const ParentReportView: React.FC<Props> = ({
   localState,
   onBackToApp,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [configured, setConfigured] = useState<boolean>(true);
-  const [cloudData, setCloudData] = useState<CloudProgressSnapshot | null>(null);
-  const [sourceMode, setSourceMode] = useState<'cloud' | 'local'>('cloud');
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const res = await fetchProgressFromCloud();
-    setConfigured(res.configured);
-    if (res.configured && res.data) {
-      setCloudData(res.data);
-      setSourceMode('cloud');
-    } else {
-      setCloudData(null);
-      setSourceMode('local');
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    loadData();
-    const timer = window.setInterval(loadData, 30000);
-    return () => window.clearInterval(timer);
-  }, [loadData]);
-
-  const snapshot: CloudProgressSnapshot = useMemo(() => {
-    if (sourceMode === 'cloud' && cloudData) return cloudData;
-    return buildCloudSnapshot(localState);
-  }, [sourceMode, cloudData, localState]);
-
   const today = getTodayKey();
-  const todayLog = snapshot.dailyLogs[today];
+  const todayLog = localState.dailyLogs[today];
   const studiedToday = didStudyOnLog(todayLog);
+  const studentName = localState.profile.name || 'Mai Nhi';
 
-  // Calculate streak from snapshot.dailyLogs
   const streakDays = useMemo(() => {
     let count = 0;
     let cursor = studiedToday ? today : shiftDateKey(today, -1);
-    while (didStudyOnLog(snapshot.dailyLogs[cursor])) {
+    while (didStudyOnLog(localState.dailyLogs[cursor])) {
       count++;
       cursor = shiftDateKey(cursor, -1);
     }
     return count;
-  }, [snapshot.dailyLogs, studiedToday, today]);
+  }, [localState.dailyLogs, studiedToday, today]);
 
   const last7Days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -89,26 +52,33 @@ export const ParentReportView: React.FC<Props> = ({
       const dt = new Date(y, m - 1, d);
       const dow = dt.getDay();
       const label = dow === 0 ? 'CN' : `T${dow + 1}`;
-      const log = snapshot.dailyLogs[key];
+      const log = localState.dailyLogs[key];
       return {
         key,
         label,
         dateShort: `${d}/${m}`,
         studied: didStudyOnLog(log),
         minutes: log?.minutesStudied || 0,
-        lessons: log?.lessonsCompleted || 0,
-        exams: log?.examsCompleted || 0,
-        questions: log?.questionsDone || 0,
         isToday: key === today,
       };
     });
-  }, [snapshot.dailyLogs, today]);
+  }, [localState.dailyLogs, today]);
 
-  const studentName = snapshot.profile.name || 'Mai Nhi';
+  const activeMistakes = useMemo(
+    () =>
+      Object.values(localState.mistakes)
+        .filter((m) => !m.resolved)
+        .sort((a, b) => b.wrongCount - a.wrongCount),
+    [localState.mistakes]
+  );
+
+  const resolvedMistakesCount = useMemo(
+    () => Object.values(localState.mistakes).filter((m) => m.resolved).length,
+    [localState.mistakes]
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 pb-10">
-      {/* Clean Top Bar */}
       <header className="bg-slate-900 text-white sticky top-0 z-20 shadow">
         <div className="max-w-3xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -121,59 +91,24 @@ export const ParentReportView: React.FC<Props> = ({
             </button>
             <div>
               <h1 className="font-black text-base sm:text-lg leading-tight">
-                📊 Theo Dõi Học Tập — {studentName}
+                📊 Tóm Tắt Học Tập — {studentName}
               </h1>
-              <div className="text-[11px] text-slate-300 flex items-center gap-1.5">
-                {sourceMode === 'cloud' ? (
-                  <>
-                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Đồng bộ trực tuyến • Cập nhật {formatDateTimeVi(snapshot.lastSyncedISO)}</span>
-                  </>
-                ) : (
-                  <>
-                    <CloudOff className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Đang xem dữ liệu trên máy này</span>
-                  </>
-                )}
+              <div className="text-[11px] text-slate-300">
+                Dữ liệu lưu trực tiếp trên trình duyệt máy của {studentName}
               </div>
             </div>
           </div>
 
           <button
-            onClick={loadData}
-            disabled={loading}
-            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            onClick={onBackToApp}
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới
+            Về trang học
           </button>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 pt-5 space-y-5">
-        {/* Cloud Setup Notice (only shown if Upstash Redis is not yet connected on Vercel) */}
-        {!configured && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 space-y-2 text-sm text-amber-950">
-            <div className="font-extrabold flex items-center gap-2">
-              ☁️ Chỉ còn 1 bước 30 giây để xem từ xa trên điện thoại khác!
-            </div>
-            <p className="text-xs leading-relaxed text-amber-900">
-              Web đã sẵn sàng API đồng bộ <code className="bg-amber-100 px-1 rounded">/api/sync</code>. Để xem tiến độ từ máy tính của {studentName} sang điện thoại của bạn:
-            </p>
-            <ol className="text-xs space-y-1 list-decimal list-inside font-semibold text-amber-900">
-              <li>Vào dự án <strong>ioe-lop5chomainhii</strong> trên <strong>vercel.com</strong> → chọn tab <strong>Storage</strong></li>
-              <li>Bấm <strong>Create Database</strong> → chọn <strong>Upstash Redis (Free)</strong> → bấm <strong>Connect</strong> vào project</li>
-              <li>Vào tab <strong>Deployments</strong> → bấm <strong>Redeploy</strong> 1 lần là xong!</li>
-            </ol>
-          </div>
-        )}
-
-        {configured && !cloudData && !loading && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs sm:text-sm text-blue-900 font-semibold">
-            ☁️ Cloud đã kết nối sẵn sàng! Ngay khi {studentName} hoàn thành bài học hoặc từ vựng đầu tiên trên máy tính, báo cáo sẽ tự hiện lên tại đây.
-          </div>
-        )}
-
         {/* Today Status Hero Card */}
         <div
           className={`rounded-3xl p-5 text-white shadow-md ${
@@ -209,34 +144,33 @@ export const ParentReportView: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* 4 Key Today Metrics */}
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="bg-white/15 rounded-2xl p-3 text-center">
               <div className="text-[11px] font-bold text-white/80">Thời gian</div>
               <div className="text-xl font-black mt-0.5">
                 {todayLog?.minutesStudied || 0}
-                <span className="text-xs font-semibold">/{snapshot.profile.dailyMinutesGoal}p</span>
+                <span className="text-xs font-semibold">/{localState.profile.dailyMinutesGoal}p</span>
               </div>
             </div>
             <div className="bg-white/15 rounded-2xl p-3 text-center">
               <div className="text-[11px] font-bold text-white/80">Bài chủ đề</div>
               <div className="text-xl font-black mt-0.5">
                 {todayLog?.lessonsCompleted || 0}
-                <span className="text-xs font-semibold">/{snapshot.profile.dailyLessonsGoal}</span>
+                <span className="text-xs font-semibold">/{localState.profile.dailyLessonsGoal}</span>
               </div>
             </div>
             <div className="bg-white/15 rounded-2xl p-3 text-center">
               <div className="text-[11px] font-bold text-white/80">Test Cấp Xã</div>
               <div className="text-xl font-black mt-0.5">
                 {todayLog?.examsCompleted || 0}
-                <span className="text-xs font-semibold">/{snapshot.profile.dailyExamGoal}</span>
+                <span className="text-xs font-semibold">/{localState.profile.dailyExamGoal}</span>
               </div>
             </div>
             <div className="bg-white/15 rounded-2xl p-3 text-center">
               <div className="text-[11px] font-bold text-white/80">Từ vựng thuộc</div>
               <div className="text-xl font-black mt-0.5">
-                {snapshot.masteredVocabCount}
-                <span className="text-xs font-semibold">/{snapshot.totalVocabCount}</span>
+                {localState.masteredVocabIds.length}
+                <span className="text-xs font-semibold">/{VOCAB_WORDS.length}</span>
               </div>
             </div>
           </div>
@@ -274,16 +208,16 @@ export const ParentReportView: React.FC<Props> = ({
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-3">
           <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
             <Trophy className="w-4 h-4 text-blue-600" />
-            Các bài {studentName} vừa làm ({snapshot.recentHistory.length})
+            Các bài {studentName} vừa làm ({localState.history.length})
           </h3>
 
-          {snapshot.recentHistory.length === 0 ? (
+          {localState.history.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-sm">
               Chưa có bài học hay bài test nào được ghi nhận.
             </div>
           ) : (
             <div className="space-y-2.5">
-              {snapshot.recentHistory.slice(0, 12).map((h) => {
+              {localState.history.slice(0, 12).map((h) => {
                 const pct =
                   h.totalQuestions > 0
                     ? Math.round((h.correctCount / h.totalQuestions) * 100)
@@ -325,31 +259,31 @@ export const ParentReportView: React.FC<Props> = ({
           <div className="flex items-center justify-between">
             <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
               <NotebookPen className="w-4 h-4 text-rose-500" />
-              Sổ Lỗi Sai đang chờ sửa ({snapshot.activeMistakes.length} câu)
+              Sổ Lỗi Sai đang chờ sửa ({activeMistakes.length} câu)
             </h3>
             <span className="text-xs font-bold text-emerald-600">
-              Đã sửa xong: {snapshot.resolvedMistakesCount} câu
+              Đã sửa xong: {resolvedMistakesCount} câu
             </span>
           </div>
 
-          {snapshot.activeMistakes.length === 0 ? (
+          {activeMistakes.length === 0 ? (
             <div className="text-center py-5 text-emerald-600 text-sm font-bold">
               ✅ Hiện không có lỗi sai tồn đọng nào!
             </div>
           ) : (
             <div className="space-y-2">
-              {snapshot.activeMistakes.slice(0, 8).map((m) => (
+              {activeMistakes.slice(0, 8).map((m) => (
                 <div
-                  key={m.questionId}
+                  key={m.question.id}
                   className="p-3 rounded-xl bg-rose-50/60 border border-rose-100 text-xs space-y-1"
                 >
-                  <div className="font-bold text-slate-900">{m.prompt}</div>
+                  <div className="font-bold text-slate-900">{m.question.prompt}</div>
                   <div className="flex flex-wrap gap-4">
                     <span className="text-rose-600 font-semibold flex items-center gap-1">
                       <XCircle className="w-3.5 h-3.5" /> Sai ({m.wrongCount}x): {m.lastWrongAnswer}
                     </span>
                     <span className="text-emerald-700 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Đúng: {m.correctAnswer}
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Đúng: {m.question.answer.split('|')[0]}
                     </span>
                   </div>
                 </div>
