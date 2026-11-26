@@ -6,6 +6,7 @@ import {
   Sparkles,
   Timer,
   Trophy,
+  Volume2,
   Zap,
 } from 'lucide-react';
 import { AppState, ExamYear, UserProfile } from '../types';
@@ -13,6 +14,7 @@ import {
   PRACTICE_CATEGORIES,
   PracticeCategory,
 } from '../data/examBank';
+import { playQuestionAudio } from '../utils/sound';
 import { StreakCalendar } from './StreakCalendar';
 
 interface Props {
@@ -72,6 +74,19 @@ export const Dashboard: React.FC<Props> = ({
   const [quickCount, setQuickCount] = useState<number>(20);
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameDraft, setNameDraft] = useState(state.profile.name);
+  const [testingSpeaker, setTestingSpeaker] = useState(false);
+
+  const handleTestSpeaker = () => {
+    playQuestionAudio(
+      './audio/test_speaker.mp3',
+      'Hello! Welcome to IOE Grade 5. Your speakers are working great!',
+      {
+        onStart: () => setTestingSpeaker(true),
+        onEnd: () => setTestingSpeaker(false),
+        onError: () => setTestingSpeaker(false),
+      }
+    );
+  };
 
   const hour = new Date().getHours();
   const greeting =
@@ -121,13 +136,27 @@ export const Dashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => onStartQuickPractice('all', 20)}
-            className="px-5 py-3 rounded-2xl bg-yellow-400 hover:bg-yellow-300 text-blue-950 font-black text-sm sm:text-base shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer"
-          >
-            <Zap className="w-5 h-5 fill-blue-950" />
-            Luyện ngay 20 câu giữ lửa!
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleTestSpeaker}
+              className={`px-4 py-3 rounded-2xl font-extrabold text-sm shadow transition flex items-center gap-2 cursor-pointer ${
+                testingSpeaker
+                  ? 'bg-emerald-400 text-emerald-950 animate-pulse'
+                  : 'bg-white/20 hover:bg-white/30 text-white border border-white/30'
+              }`}
+              title="Kiểm tra loa máy tính trước khi vào phòng thi"
+            >
+              <Volume2 className="w-5 h-5" />
+              {testingSpeaker ? 'Đang phát tiếng...' : 'Kiểm tra loa nghe'}
+            </button>
+            <button
+              onClick={() => onStartQuickPractice('all', 20)}
+              className="px-5 py-3 rounded-2xl bg-yellow-400 hover:bg-yellow-300 text-blue-950 font-black text-sm sm:text-base shadow-md flex items-center gap-2 transition active:scale-95 cursor-pointer"
+            >
+              <Zap className="w-5 h-5 fill-blue-950" />
+              Luyện ngay 20 câu giữ lửa!
+            </button>
+          </div>
         </div>
 
         {/* Inline Profile Customizer */}

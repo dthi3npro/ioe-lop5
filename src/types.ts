@@ -18,8 +18,10 @@ export interface Question {
   prompt: string;
   /** Reading passage (for reading questions) */
   passage?: string;
-  /** Audio script spoken by Web Speech API (for listening questions) */
+  /** Audio script spoken by Web Speech API (fallback for custom listening questions) */
   audioText?: string;
+  /** Pre-generated static MP3 URL in /public/audio/ for reliable playback */
+  audioUrl?: string;
   /** Choices for MC / Odd one out / Pronunciation / Listening MC / Reading */
   options?: string[];
   /** Word chunks for reorder questions (will be shuffled at runtime) */

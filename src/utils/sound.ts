@@ -1,11 +1,24 @@
-// Web Audio API sound effects + Web Speech API English TTS
+// Web Audio API sound effects + Reliable HTML5 MP3 Audio Player + Web Speech API fallback
 
 let audioCtx: AudioContext | null = null;
+let activeAudioEl: HTMLAudioElement | null = null;
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  const refreshVoices = () => {
+    cachedVoices = window.speechSynthesis.getVoices();
+  };
+  refreshVoices();
+  window.speechSynthesis.addEventListener?.('voiceschanged', refreshVoices);
+}
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
     if (Ctx) audioCtx = new Ctx();
   }
   if (audioCtx && audioCtx.state === 'suspended') {
@@ -23,9 +36,9 @@ export function playCorrectSound(enabled = true) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(523.25, now); // C5
-  osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-  osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+  osc.frequency.setValueAtTime(523.25, now);
+  osc.frequency.setValueAtTime(659.25, now + 0.08);
+  osc.frequency.setValueAtTime(783.99, now + 0.16);
 
   gain.gain.setValueAtTime(0.14, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
@@ -78,6 +91,11 @@ export function playFinishSound(enabled = true) {
 }
 
 export function stopSpeaking() {
+  if (activeAudioEl) {
+    activeAudioEl.pause();
+    activeAudioEl.currentTime = 0;
+    activeAudioEl = null;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -90,29 +108,111 @@ export function speakEnglish(
   onEnd?: () => void
 ): boolean {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    onEnd?.();
     return false;
   }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'en-US';
-  utterance.rate = rate;
-  utterance.pitch = 1.02;
+  const synth = window.speechSynthesis;
+  const wasActive = synth.speaking || synth.pending;
+  synth.cancel();
 
-  const voices = window.speechSynthesis.getVoices();
-  const preferred =
-    voices.find((v) => v.lang === 'en-US' && /Google|Samantha|Microsoft|Natural/i.test(v.name)) ||
-    voices.find((v) => v.lang.startsWith('en-US')) ||
-    voices.find((v) => v.lang.startsWith('en-GB')) ||
-    voices.find((v) => v.lang.startsWith('en'));
+  const startUtterance = () => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = rate;
+    utterance.pitch = 1.02;
 
-  if (preferred) {
-    utterance.voice = preferred;
+    const voices = cachedVoices.length ? cachedVoices : synth.getVoices();
+    const preferred =
+      voices.find(
+        (v) =>
+          v.lang === 'en-US' &&
+          /Google|Samantha|Aria|Jenny|Microsoft|Natural/i.test(v.name)
+      ) ||
+      voices.find((v) => v.lang.startsWith('en-US')) ||
+      voices.find((v) => v.lang.startsWith('en-GB')) ||
+      voices.find((v) => v.lang.startsWith('en'));
+
+    if (preferred) {
+      utterance.voice = preferred;
+    }
+
+    utterance.onstart = () => onStart?.();
+    utterance.onend = () => onEnd?.();
+    utterance.onerror = () => onEnd?.();
+
+    synth.resume();
+    synth.speak(utterance);
+  };
+
+  if (wasActive) {
+    window.setTimeout(startUtterance, 50);
+  } else {
+    startUtterance();
+  }
+  return true;
+}
+
+export interface AudioPlayCallbacks {
+  rate?: number;
+  onStart?: () => void;
+  onProgress?: (currentTime: number, duration: number) => void;
+  onEnd?: () => void;
+  onError?: (msg: string) => void;
+}
+
+/**
+ * Plays real pre-generated MP3 audio first (100% reliable on Windows/macOS/Android/iOS),
+ * falling back cleanly to Web Speech API for custom user-added questions.
+ */
+export function playQuestionAudio(
+  audioUrl?: string,
+  fallbackText?: string,
+  callbacks: AudioPlayCallbacks = {}
+) {
+  stopSpeaking();
+  const rate = callbacks.rate ?? 1.0;
+
+  if (audioUrl) {
+    const audio = new Audio(audioUrl);
+    audio.playbackRate = rate;
+    activeAudioEl = audio;
+
+    audio.onplay = () => callbacks.onStart?.();
+    audio.ontimeupdate = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        callbacks.onProgress?.(audio.currentTime, audio.duration);
+      }
+    };
+    audio.onended = () => {
+      if (activeAudioEl === audio) activeAudioEl = null;
+      callbacks.onProgress?.(audio.duration || 1, audio.duration || 1);
+      callbacks.onEnd?.();
+    };
+    audio.onerror = () => {
+      if (activeAudioEl === audio) activeAudioEl = null;
+      if (fallbackText) {
+        speakEnglish(fallbackText, rate * 0.92, callbacks.onStart, callbacks.onEnd);
+      } else {
+        callbacks.onError?.('Không phát được file âm thanh.');
+        callbacks.onEnd?.();
+      }
+    };
+
+    audio.play().catch(() => {
+      if (activeAudioEl === audio) activeAudioEl = null;
+      if (fallbackText) {
+        speakEnglish(fallbackText, rate * 0.92, callbacks.onStart, callbacks.onEnd);
+      } else {
+        callbacks.onError?.('Trình duyệt chặn tự phát âm thanh. Hãy bấm lại nút loa!');
+        callbacks.onEnd?.();
+      }
+    });
+    return;
   }
 
-  utterance.onstart = () => onStart?.();
-  utterance.onend = () => onEnd?.();
-  utterance.onerror = () => onEnd?.();
-
-  window.speechSynthesis.speak(utterance);
-  return true;
+  if (fallbackText) {
+    speakEnglish(fallbackText, rate * 0.92, callbacks.onStart, callbacks.onEnd);
+  } else {
+    callbacks.onEnd?.();
+  }
 }

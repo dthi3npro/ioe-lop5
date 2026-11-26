@@ -163,7 +163,7 @@ export function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Main Top Navbar */}
       <header className="ioe-header-bg text-white sticky top-0 z-30 shadow-md">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
           <button
             onClick={() => setTab('home')}
             className="flex items-center gap-2.5 cursor-pointer"
@@ -229,7 +229,7 @@ export function App() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 lg:px-6 py-6">
         {tab === 'home' && (
           <Dashboard
             state={state}

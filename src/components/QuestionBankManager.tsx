@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BookOpen, PlusCircle, Search, Volume2 } from 'lucide-react';
 import { ExamYear, Question, QuestionType } from '../types';
 import { BUILTIN_QUESTIONS } from '../data/examBank';
-import { speakEnglish } from '../utils/sound';
+import { playQuestionAudio } from '../utils/sound';
 
 interface Props {
   customQuestions: Question[];
@@ -304,12 +304,12 @@ export const QuestionBankManager: React.FC<Props> = ({
                   {q.topic}
                 </span>
               </div>
-              {q.audioText && (
+              {(q.audioUrl || q.audioText) && (
                 <button
-                  onClick={() => speakEnglish(q.audioText!, 0.9)}
+                  onClick={() => playQuestionAudio(q.audioUrl, q.audioText, { rate: 1.0 })}
                   className="text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
                 >
-                  <Volume2 className="w-3.5 h-3.5" /> Nghe thử
+                  <Volume2 className="w-3.5 h-3.5" /> Nghe thử MP3
                 </button>
               )}
             </div>
