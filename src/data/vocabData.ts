@@ -160,5 +160,5 @@ export const VOCAB_WORDS: VocabWord[] = RAW_VOCAB.map((item, idx) => ({
   emoji: item[4],
   exampleEn: item[5],
   exampleVi: item[6],
-  audioUrl: `./audio/vocab/v_${idx + 1}.mp3`,
+  audioUrl: `/audio/vocab/v_${idx + 1}.mp3`,
 }));

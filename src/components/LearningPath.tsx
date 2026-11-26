@@ -70,7 +70,7 @@ export const LearningPath: React.FC<Props> = ({
 
   const handleTestSpeaker = () => {
     playQuestionAudio(
-      './audio/test_speaker.mp3',
+      '/audio/test_speaker.mp3',
       'Hello Mai Nhi! Welcome to IOE Grade 5. Your speakers are working great!',
       {
         onStart: () => setTestingSpeaker(true),

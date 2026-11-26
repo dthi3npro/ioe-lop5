@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   CalendarDays,
@@ -47,11 +47,41 @@ import { HistoryView } from './components/HistoryView';
 import { QuestionBankManager } from './components/QuestionBankManager';
 import { ExamRoom } from './components/ExamRoom';
 import { ResultSummary } from './components/ResultSummary';
+import { ParentReportView } from './components/ParentReportView';
+import { pushProgressToCloud } from './utils/cloudSync';
 
 type Tab = 'learn' | 'vocab' | 'exam' | 'mistakes' | 'progress' | 'bank';
 
+function isParentReportRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.replace(/\/+$/, '') === '/quan-ly';
+}
+
 export function App() {
+  const [isParentView, setIsParentView] = useState<boolean>(() =>
+    isParentReportRoute()
+  );
   const [state, setState] = useState<AppState>(() => loadAppState());
+
+  useEffect(() => {
+    const onPop = () => setIsParentView(isParentReportRoute());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const openParentView = () => {
+    window.history.pushState({}, '', '/quan-ly');
+    setIsParentView(true);
+  };
+
+  const closeParentView = () => {
+    window.history.pushState({}, '', '/');
+    setIsParentView(false);
+  };
+
+  const syncInBackground = (nextState: AppState) => {
+    void pushProgressToCloud(nextState);
+  };
   const [tab, setTab] = useState<Tab>('learn');
   const [vocabThemeId, setVocabThemeId] = useState<string>('school');
   const [activeExam, setActiveExam] = useState<ExamConfig | null>(null);
@@ -75,6 +105,7 @@ export function App() {
         profile: { ...prev.profile, ...patch },
       };
       saveAppState(next);
+      syncInBackground(next);
       return next;
     });
   };
@@ -143,6 +174,7 @@ export function App() {
       activeExam.unitId
     );
     setState(nextState);
+    syncInBackground(nextState);
     setActiveExam(null);
     setLastResult({
       item: historyItem,
@@ -150,6 +182,13 @@ export function App() {
       resolvedCount: resolvedCountInSession,
     });
   };
+
+  // Dedicated Parent/Sibling Report Page (/quan-ly)
+  if (isParentView) {
+    return (
+      <ParentReportView localState={state} onBackToApp={closeParentView} />
+    );
+  }
 
   // Fullscreen Exam Room View
   if (activeExam) {
@@ -332,12 +371,18 @@ export function App() {
             soundEnabled={state.profile.soundEnabled}
             studentName={state.profile.name}
             onToggleMastered={(wordId) =>
-              setState((prev) => toggleVocabMastered(prev, wordId))
+              setState((prev) => {
+                const next = toggleVocabMastered(prev, wordId);
+                syncInBackground(next);
+                return next;
+              })
             }
             onCompleteGame={(minutes, totalQ, correctQ) =>
-              setState((prev) =>
-                recordVocabGameComplete(prev, minutes, totalQ, correctQ)
-              )
+              setState((prev) => {
+                const next = recordVocabGameComplete(prev, minutes, totalQ, correctQ);
+                syncInBackground(next);
+                return next;
+              })
             }
           />
         )}
@@ -358,7 +403,11 @@ export function App() {
             mistakes={state.mistakes}
             onStartReviewMistakes={(qs) => startMistakeReview(qs)}
             onMarkResolved={(qid) =>
-              setState((prev) => markMistakeResolved(prev, qid))
+              setState((prev) => {
+                const next = markMistakeResolved(prev, qid);
+                syncInBackground(next);
+                return next;
+              })
             }
           />
         )}
@@ -383,8 +432,16 @@ export function App() {
         )}
       </main>
 
-      <footer className="text-center py-4 text-xs text-slate-400 border-t border-slate-200/70">
-        Góc học Tiếng Anh IOE Lớp 5 dành riêng cho {state.profile.name} 🐰 • Chúc {state.profile.name} thi Cấp Xã thật tự tin & rinh giải cao! 🏆
+      <footer className="text-center py-4 text-xs text-slate-400 border-t border-slate-200/70 space-x-3">
+        <span>
+          Góc học Tiếng Anh IOE Lớp 5 dành riêng cho {state.profile.name} 🐰 • Chúc {state.profile.name} thi Cấp Xã thật tự tin & rinh giải cao! 🏆
+        </span>
+        <button
+          onClick={openParentView}
+          className="text-slate-400 hover:text-blue-600 underline cursor-pointer"
+        >
+          📊 Báo cáo phụ huynh
+        </button>
       </footer>
     </div>
   );
